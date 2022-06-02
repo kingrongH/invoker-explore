@@ -6,7 +6,7 @@ use crate::Typed;
 
 type BoxAny = Box<dyn Any + Send + Sync>;
 
-pub trait Invoker<Req>: Send {
+pub trait Invoker<Req> {
 
     type Res;
 
