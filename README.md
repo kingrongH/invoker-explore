@@ -54,7 +54,25 @@ impl Typed for InvokeContext {
 And the same logic for `InvokerManager`
 
 
-# Futhermore 
+# Benches
+
+```shell
+cargo criterion
+```
+
+with *MacBook Pro (16-inch, 2019)*, *16 GB 2667 MHz DDR4* the bench shows as following
+
+| bench | time |
+| - | - |
+| dyn_invoke | [37.717 us 37.936 us 38.169 us] |
+| dyn_mutex_invoke | [38.563 us 39.101 us 39.786 us] |
+| direct_invoke | [38.762 us 39.133 us 39.526 us] |
+
+
+from what's show above, there is very little difference between `dyn_invoke` and `direct_invoke`
+
+
+# Furthermore 
 
 
 1. protocol provider
@@ -69,5 +87,5 @@ if this is stable, we may replace `HashMap<TypeId, BoxAny>` with `Provider` api 
 
 or maybe better wait https://github.com/rust-lang/rust/issues/65991 land
 
-
+3. once `Provider` Api has been merged add it to bench
 
