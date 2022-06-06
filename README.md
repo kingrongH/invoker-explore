@@ -67,9 +67,11 @@ with *MacBook Pro (16-inch, 2019)*, *16 GB 2667 MHz DDR4* the bench shows as fol
 | dyn_invoke | [37.717 us 37.936 us 38.169 us] |
 | dyn_mutex_invoke | [38.563 us 39.101 us 39.786 us] |
 | direct_invoke | [38.762 us 39.133 us 39.526 us] |
+| dyn_without_io_invoke | [274.58 ns 276.68 ns 278.89 ns] |
+| direct_without_io | [253.80 ns 255.18 ns 256.76 ns] |
 
 
-from what's show above, there is very little difference between `dyn_invoke` and `direct_invoke`
+from what's show above, with io operations there is very little difference between `dyn_invoke` and `direct_invoke`
 
 
 # Furthermore 
