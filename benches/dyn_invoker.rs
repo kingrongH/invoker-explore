@@ -1,4 +1,4 @@
-use std::{fs::OpenOptions, io::Write};
+use std::{fs::OpenOptions, io::Write, sync::Mutex};
 
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
 use invoker_explore::{invoker::{Invoker, InvokeContext, InvokerManager}, Typed};
@@ -9,6 +9,12 @@ static INVOKER_MANAGER: Lazy<InvokerManager> = Lazy::new(|| {
     let mut manager = InvokerManager::new();
     manager.add_invoker(InvokerFoo);
     manager
+});
+
+static MUTEX_INVOKER_MANAGER: Lazy<Mutex<InvokerManager>> = Lazy::new(|| {
+    let mut manager = InvokerManager::new();
+    manager.add_invoker(InvokerFoo);
+    Mutex::new(manager)
 });
 
 static INVOKER_FOO: InvokerFoo = InvokerFoo; 
@@ -49,6 +55,14 @@ fn dyn_invoke(input: &str) {
     invoker.invoke(&mut context, input);
 }
 
+fn dyn_mutex_invoke(input: &str) {
+    let manager = MUTEX_INVOKER_MANAGER.lock().unwrap();
+    let invoker = manager.get::<InvokerFoo>().unwrap();
+    let mut context = InvokeContext::new();
+    let local_context = LocalContext { req_id: "req_id".to_owned(), times: 0 };
+    context.with_context(local_context);
+    invoker.invoke(&mut context, input);
+}
 fn direct_invoke(input: &str) {
     let invoker = &INVOKER_FOO;
     let mut context = InvokeContext::new();
@@ -61,9 +75,13 @@ fn dyn_invoke_benchmark(c: &mut Criterion) {
     c.bench_function("dyn_invoke", |b| b.iter(|| dyn_invoke(black_box("input"))));
 }
 
+fn dyn_mutex_invoke_benchmark(c: &mut Criterion) {
+    c.bench_function("dyn_mutex_invoke", |b| b.iter(|| dyn_mutex_invoke(black_box("input"))));
+}
+
 fn direct_invoke_benchmark(c: &mut Criterion) {
     c.bench_function("direct_invoke", |b| b.iter(|| direct_invoke(black_box("input"))));
 }
 
-criterion_group!(benches, dyn_invoke_benchmark, direct_invoke_benchmark);
+criterion_group!(benches, dyn_invoke_benchmark, dyn_mutex_invoke_benchmark, direct_invoke_benchmark);
 criterion_main!(benches);
