@@ -1,9 +1,7 @@
-#![feature(once_cell)]
-
-mod invoker;
+pub mod invoker;
 
 
-trait Typed {
+pub trait Typed {
 
     fn get<I: 'static>(&self) -> Option<&I>;
 

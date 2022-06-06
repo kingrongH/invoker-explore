@@ -88,12 +88,14 @@ impl Typed for InvokerManager {
 #[cfg(test)]
 mod test {
 
-    use std::{any::Any, time::Duration, lazy::SyncLazy, sync::Mutex};
+    use std::{any::Any, time::Duration, sync::Mutex};
+
+    use once_cell::sync::Lazy;
 
     use crate::Typed;
     use super::{Invoker, InvokeContext, InvokerManager};
 
-    static INVOKER_MANAGER: SyncLazy<Mutex<InvokerManager>> = SyncLazy::new(|| {
+    static INVOKER_MANAGER: Lazy<Mutex<InvokerManager>> = Lazy::new(|| {
         let manager = InvokerManager::new();
         Mutex::new(manager)
     });
