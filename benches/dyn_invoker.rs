@@ -1,7 +1,7 @@
 use std::{fs::OpenOptions, io::Write, sync::Mutex};
 
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
-use invoker_explore::{invoker::{Invoker, InvokeContext, InvokerManager}, Typed};
+use invoker_explore::{invoker_manager::{Invoker, InvokeContext, InvokerManager}, Typed};
 use once_cell::sync::Lazy;
 
 
