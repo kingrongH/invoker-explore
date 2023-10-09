@@ -294,50 +294,260 @@ mod inovker3 {
 
 
 
-// /// totally typed client
-// mod invoker4 {
-//     use std::marker::PhantomData;
+mod invoker4 {
+    use std::marker::PhantomData;
+
+    use futures_util::Future;
 
 
-//     trait Transport<Req> {
+    pub trait Transport<Req> {
 
-//         type Response;
+        type Response;
 
-//         type Error;
+        type Error;
         
-//         type Futrue;
+        type Futrue: Future<Output = Result<Self::Response, Self::Error>>;
 
-//         fn transport(&self, req: Req) -> Result<Self::Response, Self::Error>;
+        fn transport(&self, req: Req) -> Self::Futrue;
 
-//     }
+    }
 
-//     #[derive(Debug, thiserror::Error)]
-//     pub enum InvokerError {
-//         #[error("general error")]
-//         GeneralError(#[from] anyhow::Error),
-//     }
-
-
-//     #[derive(Debug, Clone)]
-//     pub struct Invoker<T, Req, Res> {
-//         _marker: PhantomData<fn(Req) -> Res>,
-//         transport: T,
-//     }
-
-//     impl<T, Req, Res> Invoker<T, Req, Res> 
-//     where 
-//         T: Transport<Req, Response = Res>
-//     {
+    #[derive(Debug, thiserror::Error)]
+    pub enum InvokerError {
+        #[error("general error")]
+        GeneralError(#[from] anyhow::Error),
+    }
 
 
-//         pub async fn invoke(&self) -> Result<Res, InvokerError> {
+    #[derive(Debug, Clone)]
+    pub struct Invoker<T, Req, Res> {
+        _marker: PhantomData<fn(Req) -> Res>,
+        transport: T,
+    }
+
+    impl<T, Req, Res> Invoker<T, Req, Res> 
+    where 
+        T: Transport<Req, Response = Res>,
+        T::Error: Into<InvokerError>
+    {
+
+
+        pub async fn invoke(&self, req: Req) -> Result<Res, InvokerError> {
+            self.transport.transport(req).await.map_err(|e| e.into())
+        }
+        
+    }
+
+
+}
+
+
+mod invoker5 {
+
+    use std::{collections::HashMap, any::{TypeId, Any}, future::Future, marker::PhantomData};
+
+    use futures_util::future::BoxFuture;
+    use pin_project_lite::pin_project;
+    use serde_json::Value;
+
+
+    pub trait Encoder<V> {
+
+        type Message;
+        type Error;
+
+        fn encode(&self, value: V) -> Result<Self::Message, Self::Error>;
+
+    }
+
+    pub trait Decoder<M> {
+
+        type Value;
+        type Error;
+
+        fn decode(&self, message: M) -> Result<Self::Value, Self::Error>;
+
+    }
 
 
 
-//         }
+    pub trait Message: Sized {
+
+        type MsgType;
+
+        type Encoder: Encoder<Self>;
+
+        type Decoder: Decoder<Self::MsgType>;
+        
+    }
+
+
+    #[derive(Debug, Clone)]
+    pub struct MethodDefInfo{
+        map: HashMap<String, String>,
+    }
+
+    impl MethodDefInfo {
+
+        /// create new method def info
+        pub fn new() -> Self {
+            Self { map: HashMap::new() }
+        }
+
+    }
+
+
+    pub trait MethodDef {
+
+        const NAME: &'static str;
+
+        type Request: Message + Send + Sync + 'static;
+        type Response: Message + Send + Sync + 'static;
+
+        fn get_method_def_info(&self) -> &MethodDefInfo;
+
+    }
+
+    trait Transport<T> {
+
+        type Response;
+        type Error;
+        type Future: Future<Output = Result<Self::Response, Self::Error>>;
 
         
-//     }
 
-// }
+
+    }
+
+
+    trait Invoker<M: MethodDef> {
+
+        type Error: Into<anyhow::Error>;
+
+        type Future: Future<Output = Result<M::Response, Self::Error>> + Send + 'static;
+
+        // invoke 
+        fn invoke(&self, req: M::Request) -> Self::Future;
+    }
+
+
+
+    /// impl
+   
+    pub struct JsonEncoder;
+    pub struct JsonDecoder<V> {
+        _m: PhantomData<V>
+    }
+
+    impl<T> Encoder<T> for JsonEncoder 
+    where 
+        T: serde::Serialize
+    { 
+        type Message = String;
+        type Error = serde_json::Error;
+
+        fn encode(&self, value: T) -> Result<Self::Message, Self::Error> {
+            serde_json::to_string(&value)
+        } 
+    }
+
+    impl<M, V> Decoder<M> for JsonDecoder<V>
+    where
+        M: AsRef<str>,
+        V: serde::de::DeserializeOwned
+    {
+
+        type Value = V;
+        type Error = serde_json::Error;
+
+        fn decode(&self, message: M) -> Result<Self::Value, Self::Error> {
+            serde_json::from_str(message.as_ref())
+        }
+    }
+
+
+
+    impl Message for Value { 
+        type MsgType = String; 
+        type Encoder = JsonEncoder; 
+        type Decoder = JsonDecoder<Self>; 
+    }
+
+    pub struct GenericMethod;
+    impl MethodDef for GenericMethod {
+
+        const NAME: &'static str = "genericInvoke";
+
+        type Request = Value;
+
+        type Response = Value;
+
+        fn get_method_def_info(&self) -> &MethodDefInfo {
+            todo!()
+        }
+    }
+
+
+
+    #[derive(Debug, thiserror::Error)]
+    pub enum InvokerError {
+        #[error("general error")]
+        GeneralError(#[from] anyhow::Error),
+    }
+
+    pub struct BaseJsonInvoker;
+
+    pin_project! {
+        pub struct InvokerFut {
+            #[pin]
+            fut: BoxFuture<'static, Result<Value, InvokerError>>
+        }
+    }
+
+    impl Future for InvokerFut {
+
+        type Output = Result<Value, InvokerError>;
+
+        fn poll(self: std::pin::Pin<&mut Self>, cx: &mut std::task::Context<'_>) -> std::task::Poll<Self::Output> {
+            let proj = self.project();
+            proj.fut.poll(cx)
+        }
+    }
+
+
+
+    impl Invoker<GenericMethod> for BaseJsonInvoker {
+
+        type Error = InvokerError;
+
+        type Future = InvokerFut;
+
+        fn invoke(&self, req: <GenericMethod as MethodDef>::Request) -> Self::Future {
+
+            let fut = async move {
+                // message serialize
+                let encoder = JsonEncoder;          
+                let s = encoder.encode(req).map_err(|e| {
+                    InvokerError::GeneralError(anyhow::Error::new(e))
+                })?;
+
+                // io
+                println!("io out {}", s);
+
+                // message deserialize
+                let decoder = JsonDecoder { _m: PhantomData };
+                decoder.decode(s).map_err(|e| {
+                    InvokerError::GeneralError(anyhow::Error::new(e))
+                })
+            };
+
+            InvokerFut { fut: Box::pin(fut) }
+        }
+    }
+
+
+
+
+
+}
 
